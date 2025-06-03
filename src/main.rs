@@ -14,8 +14,7 @@ use iced::widget::Text;
 use iced::widget::TextInput;
 use iced::widget::container;
 use iced::window;
-use iced_aw::MenuBar;
-use iced_aw::menu_items;
+use iced::overlay::menu;
 
 pub fn style_box_1(theme: &Theme) -> container::Style {
     let palette = theme.extended_palette();
@@ -74,8 +73,11 @@ impl App {
         }
     }
     fn view(&self) -> Column<Message> {
-        let roots = menu_items![(Text::new("File"))(Text::new("Help"))];
-        let menu_bar = MenuBar::new(roots);
+        let menu = menu::Menu::new()
+            .add_item("File")
+            .add_item("Edit")
+            .add_item("View")
+            .add_item("Help");
 
         let input_ip_text = Text::new("Target")
             .line_height(1.0)
