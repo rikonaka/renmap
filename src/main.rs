@@ -1,140 +1,126 @@
-use iced::Background;
-use iced::Border;
-use iced::Color;
-use iced::Length;
-use iced::Size;
-use iced::Theme;
-use iced::alignment::Horizontal;
-use iced::alignment::Vertical;
-use iced::widget::Button;
-use iced::widget::Column;
-use iced::widget::Container;
-use iced::widget::Row;
-use iced::widget::Text;
-use iced::widget::TextInput;
-use iced::widget::container;
-use iced::window;
-use iced::overlay::menu;
+use eframe::App;
+use eframe::Frame;
+use eframe::egui;
+use eframe::egui::CentralPanel;
+use eframe::egui::ComboBox;
+use eframe::egui::TextEdit;
+use eframe::egui::containers;
+// use eframe::egui::FontData;
+// use eframe::egui::FontDefinitions;
+// use eframe::egui::FontFamily;
+use eframe::egui::Align;
+use eframe::egui::Button;
+use eframe::egui::Grid;
+use eframe::egui::Label;
+use eframe::egui::Layout;
+use eframe::egui::RichText;
+use eframe::egui::Slider;
+use eframe::egui::TopBottomPanel;
+use eframe::egui::Widget;
+use eframe::egui::vec2;
+use eframe::icon_data;
+use egui_extras::Column;
+use egui_extras::TableBuilder;
 
-pub fn style_box_1(theme: &Theme) -> container::Style {
-    let palette = theme.extended_palette();
+fn main() -> eframe::Result {
+    let icon_bytes = include_bytes!("../assets/corgi.png");
+    let icon = icon_data::from_png_bytes(icon_bytes).expect("failed to load icon");
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([800.0, 600.0])
+            .with_icon(icon),
+        ..Default::default()
+    };
+    // Use MSYH font for other non-English user, but this font will look a bit blurry.
+    // let font_bytes = include_bytes!("../assets/MSYH.TTC");
+    // let mut fonts = FontDefinitions::default();
+    // fonts.font_data.insert(
+    //     "MSYH".to_owned(),
+    //     FontData::from_owned(font_bytes.to_vec()).into(),
+    // );
+    // fonts
+    //     .families
+    //     .entry(FontFamily::Monospace)
+    //     .or_default()
+    //     .insert(0, "MSYH".to_owned());
+    // fonts
+    //     .families
+    //     .entry(egui::FontFamily::Proportional)
+    //     .or_default()
+    //     .insert(0, "MSYH".to_owned());
 
-    container::Style {
-        background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 0.0))),
-        border: Border {
-            width: 1.0,
-            radius: 0.0.into(),
-            color: palette.background.strong.color,
-        },
-        ..container::Style::default()
-    }
+    let app_name = format!("renmap v{}", env!("CARGO_PKG_VERSION"));
+    eframe::run_native(
+        &app_name,
+        options,
+        Box::new(|cc| {
+            // cc.egui_ctx.set_zoom_factor(1.1);
+            cc.egui_ctx.set_pixels_per_point(1.1);
+            // cc.egui_ctx.set_fonts(fonts);
+            Ok(Box::<RenmapApp>::default())
+        }),
+    )
 }
 
-pub fn main() -> iced::Result {
-    let mut window = window::Settings::default();
-    let icon = window::icon::from_file("./assets/corgi.png").expect("can not load icon");
-    window.icon = Some(icon);
-    window.size = Size::new(800.0, 600.0);
-    iced::application(App::title, App::update, App::view)
-        .window(window)
-        .run()
-}
-
-#[derive(Default)]
-struct App {
-    scan_info: String,
-    target_ip: String,
+struct RenmapApp {
+    target_addr: String,
     target_port: String,
 }
 
-#[derive(Debug, Clone)]
-enum Message {
-    StartScan,
-    UpdateIP(String),
-    UpdatePort(String),
-}
-
-impl App {
-    fn title(&self) -> String {
-        format!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
-    }
-    fn update(&mut self, message: Message) {
-        match message {
-            Message::StartScan => {
-                self.scan_info =
-                    format!("Starting scan on {}:{}", self.target_ip, self.target_port);
-            }
-            Message::UpdateIP(ip) => {
-                self.target_ip = ip;
-            }
-            Message::UpdatePort(port) => {
-                self.target_port = port;
-            }
+impl Default for RenmapApp {
+    fn default() -> Self {
+        Self {
+            target_addr: "127.0.0.1".to_owned(),
+            target_port: "8080".to_owned(),
         }
     }
-    fn view(&self) -> Column<Message> {
-        let menu = menu::Menu::new()
-            .add_item("File")
-            .add_item("Edit")
-            .add_item("View")
-            .add_item("Help");
+}
 
-        let input_ip_text = Text::new("Target")
-            .line_height(1.0)
-            .align_x(Horizontal::Center);
+impl App for RenmapApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
+        TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("File").clicked() {}
+                    if ui.button("Save").clicked() {}
+                });
+                ui.menu_button("edit", |ui| {
+                    if ui.button("prev").clicked() {}
+                    if ui.button("redo").clicked() {}
+                });
+            });
+        });
 
-        let input_ip = TextInput::new("127.0.0.1", &self.target_ip)
-            .on_input(Message::UpdateIP)
-            .padding(10)
-            .line_height(1.0)
-            .width(Length::Fill)
-            .align_x(Horizontal::Left);
+        CentralPanel::default().show(ctx, |ui| {
+            let label_target = Label::new("Target");
+            let label_port = Label::new("Port");
+            let input_target = TextEdit::singleline(&mut self.target_addr);
+            let input_port = TextEdit::singleline(&mut self.target_port);
+            let button_scan = Button::new("Scan");
 
-        let input_port_text = Text::new("Port")
-            .line_height(1.0)
-            .align_x(Horizontal::Center);
+            TableBuilder::new(ui)
+                .column(Column::exact(100.0))
+                .column(Column::remainder())
+                .column(Column::exact(100.0))
+                .body(|mut body| {
+                    body.row(20.0, |mut row| {
+                        row.col(|ui| {
+                            ui.label("固定列");
+                        });
+                        row.col(|ui| {
+                            ui.label("会伸缩的列");
+                        });
+                    });
+                });
 
-        let input_port = TextInput::new("80", &self.target_port)
-            .on_input(Message::UpdatePort)
-            .padding(10)
-            .line_height(1.0)
-            .width(Length::Fill)
-            .align_x(Horizontal::Left);
-
-        let start_button_text = Text::new("Start")
-            .line_height(1.0)
-            .width(Length::Fill)
-            .align_x(Horizontal::Center);
-        let start_button = Button::new(start_button_text)
-            .width(Length::Fill)
-            .on_press(Message::StartScan);
-
-        let row_1 = Row::new()
-            .padding(20)
-            .spacing(20)
-            .align_y(Vertical::Center)
-            .push(input_ip_text)
-            .push(input_ip)
-            .push(input_port_text)
-            .push(input_port)
-            .push(start_button);
-
-        let group_1 = Container::new(row_1)
-            .width(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Center)
-            .style(style_box_1);
-
-        let target_check_line = Text::new(&self.scan_info)
-            .width(Length::Fill)
-            .align_x(Horizontal::Left);
-
-        Column::new()
-            .padding(20)
-            .spacing(20)
-            .align_x(Horizontal::Center)
-            .push(group_1)
-            .push(target_check_line)
-            .into()
+            ui.horizontal(|ui| {
+                ui.add(label_target);
+                ui.add(input_target);
+                ui.add(label_port);
+                ui.add(input_port);
+                ui.add(button_scan);
+            });
+            // ui.separator();
+        });
     }
 }
