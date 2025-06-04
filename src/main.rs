@@ -6,7 +6,6 @@ use eframe::egui::TextEdit;
 // use eframe::egui::FontData;
 // use eframe::egui::FontDefinitions;
 // use eframe::egui::FontFamily;
-use eframe::egui::Checkbox;
 use eframe::egui::TopBottomPanel;
 use eframe::icon_data;
 
