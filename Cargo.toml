@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-eframe = "^0"
-egui_extras = "^0"
+anyhow = "^1"
+chrono = "^0"
+eframe = { version = "^0", path = "../egui/crates/eframe" }
+egui_extras = { version = "^0", path = "../egui/crates/egui_extras" }
+pistol = { version = "^3", path = "../pistol-rs/" }
+rusqlite = { version = "^0", features = ["bundled"] }
