@@ -6,9 +6,9 @@ use eframe::egui::RichText;
 // use eframe::egui::FontData;
 // use eframe::egui::FontDefinitions;
 // use eframe::egui::FontFamily;
-use eframe::egui::Align;
 use eframe::egui::Align2;
 use eframe::egui::CollapsingHeader;
+use eframe::egui::Direction;
 use eframe::egui::Layout;
 use eframe::egui::ScrollArea;
 use eframe::egui::SidePanel;
@@ -137,8 +137,8 @@ struct RenmapApp {
 impl Default for RenmapApp {
     fn default() -> Self {
         Self {
-            target_addr: "192.168.1.2".to_owned(),
-            target_port: "22".to_owned(),
+            target_addr: "192.168.7.1".to_owned(),
+            target_port: "80".to_owned(),
             app_mode: AppMode::default(),
             scan_mode: ScanMode::default(),
         }
@@ -282,23 +282,16 @@ impl App for RenmapApp {
                             // start scan
                             match pistol_scan(&self.target_addr, &self.target_port, &self.scan_mode)
                             {
-                                Ok(ret) => {
-                                    println!("{}", ret);
-                                    match SCAN_RETS.lock() {
-                                        Ok(_) => match SCAN_RETS_ID.lock() {
-                                            Ok(mut id) => match SCAN_RETS.lock() {
-                                                Ok(mut map) => {
-                                                    map.insert(*id, ret);
-                                                    *id += 1;
-                                                    println!("insert end");
-                                                }
-                                                Err(e) => self.set_error_mssage(&e.to_string()),
-                                            },
-                                            Err(e) => self.set_error_mssage(&e.to_string()),
-                                        },
+                                Ok(ret) => match SCAN_RETS_ID.lock() {
+                                    Ok(mut id) => match SCAN_RETS.lock() {
+                                        Ok(mut map) => {
+                                            map.insert(*id, ret);
+                                            *id += 1;
+                                        }
                                         Err(e) => self.set_error_mssage(&e.to_string()),
-                                    }
-                                }
+                                    },
+                                    Err(e) => self.set_error_mssage(&e.to_string()),
+                                },
                                 Err(e) => self.set_error_mssage(&e.to_string()),
                             }
                         };
@@ -316,11 +309,16 @@ impl App for RenmapApp {
                         Ok(map) => {
                             if map.len() > 0 {
                                 TableBuilder::new(ui)
-                                    .id_salt("results_table")
+                                    .id_salt("scan_results_table")
                                     .striped(true)
-                                    .cell_layout(Layout::left_to_right(Align::Center))
+                                    .resizable(true)
+                                    .cell_layout(Layout::centered_and_justified(
+                                        Direction::BottomUp,
+                                    ))
                                     .column(Column::auto())
-                                    .column(Column::remainder())
+                                    .column(Column::auto())
+                                    .column(Column::auto())
+                                    .column(Column::auto())
                                     .header(20.0, |mut header| {
                                         header.col(|ui| {
                                             ui.label(RichText::new("id").strong());
@@ -337,12 +335,13 @@ impl App for RenmapApp {
                                     })
                                     .body(|mut body| {
                                         for (k, v) in map.iter() {
-                                            let mut i: u32 = 0;
+                                            // start from 1
+                                            let mut i: u32 = 1;
                                             for (ip, hmap) in &v.scans {
                                                 for (p, s) in hmap {
                                                     body.row(18.0, |mut row| {
                                                         row.col(|ui| {
-                                                            ui.label(format!("#{}-{}", k, i));
+                                                            ui.label(format!("{}-{}", k, i));
                                                         });
                                                         row.col(|ui| {
                                                             ui.label(format!("{}", ip));
