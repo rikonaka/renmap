@@ -30,6 +30,9 @@ mod scan;
 use db::SqliteDB;
 use scan::pistol_scan;
 
+// start from 1
+static SCAN_RETS_ID: LazyLock<Mutex<u32>> = LazyLock::new(|| Mutex::new(1));
+
 static SCAN_RETS: LazyLock<Mutex<HashMap<u32, TcpUdpScans>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -134,11 +137,18 @@ struct RenmapApp {
 impl Default for RenmapApp {
     fn default() -> Self {
         Self {
-            target_addr: "".to_owned(),
-            target_port: "".to_owned(),
+            target_addr: "192.168.1.2".to_owned(),
+            target_port: "22".to_owned(),
             app_mode: AppMode::default(),
             scan_mode: ScanMode::default(),
         }
+    }
+}
+
+impl RenmapApp {
+    fn set_error_mssage(&mut self, e: &str) {
+        self.app_mode.show_error_message = true;
+        self.app_mode.error_message = e.to_string();
     }
 }
 
@@ -193,10 +203,7 @@ impl App for RenmapApp {
                             self.app_mode.in_memroy_confirm = false;
                             match SqliteDB::drop_all() {
                                 Ok(_) => (),
-                                Err(e) => {
-                                    self.app_mode.show_error_message = true;
-                                    self.app_mode.error_message = e.to_string();
-                                }
+                                Err(e) => self.set_error_mssage(&e.to_string()),
                             }
                         }
                         if ui.button("No").clicked() {
@@ -213,7 +220,7 @@ impl App for RenmapApp {
                 .resizable(false)
                 .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
-                    ui.label(self.app_mode.error_message.clone());
+                    ui.label(&self.app_mode.error_message);
                     ui.horizontal(|ui| {
                         if ui.button("Yes").clicked() {
                             self.app_mode.show_error_message = false;
@@ -222,136 +229,172 @@ impl App for RenmapApp {
                 });
         }
 
-        // scan functions
-        let mut scan_interface = || {
-            CentralPanel::default().show(ctx, |ui| {
-                ui.columns(2, |columns| {
-                    columns[0].horizontal(|ui| {
-                        ui.label(RichText::new("Target").strong());
-                        ui.add_sized(
-                            ui.available_size(),
-                            TextEdit::singleline(&mut self.target_addr),
-                        );
-                    });
-                    columns[1].horizontal(|ui| {
-                        ui.label(RichText::new("Port(s)").strong());
-                        ui.add_sized(
-                            ui.available_size(),
-                            TextEdit::singleline(&mut self.target_port),
-                        );
-                    });
-                });
-
-                CollapsingHeader::new("Advanced Options")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        ui.columns(2, |columns| {
-                            columns[0].horizontal(|ui| {
-                                ui.label("Exclued Target");
-                                ui.add_sized(
-                                    ui.available_size(),
-                                    TextEdit::singleline(&mut self.target_addr),
-                                );
-                            });
-                            columns[1].horizontal(|ui| {
-                                ui.label("Exclued Port(s)");
-                                ui.add_sized(
-                                    ui.available_size(),
-                                    TextEdit::singleline(&mut self.target_port),
-                                );
-                            });
+        match self.app_mode.app_interface {
+            AppInterface::Scan => {
+                CentralPanel::default().show(ctx, |ui| {
+                    ui.columns(2, |columns| {
+                        columns[0].horizontal(|ui| {
+                            ui.label(RichText::new("Target").strong());
+                            ui.add_sized(
+                                ui.available_size(),
+                                TextEdit::singleline(&mut self.target_addr),
+                            );
                         });
-                        ui.horizontal(|ui| {
-                            ui.checkbox(&mut self.scan_mode.fast_mode, "Fast Mode");
-                            ui.checkbox(&mut self.scan_mode.slow_mode, "Slow Mode");
-                            ui.checkbox(&mut self.scan_mode.no_ping, "No Ping");
+                        columns[1].horizontal(|ui| {
+                            ui.label(RichText::new("Port(s)").strong());
+                            ui.add_sized(
+                                ui.available_size(),
+                                TextEdit::singleline(&mut self.target_port),
+                            );
                         });
                     });
 
-                ui.separator();
+                    CollapsingHeader::new("Advanced Options")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            ui.columns(2, |columns| {
+                                columns[0].horizontal(|ui| {
+                                    ui.label("Exclued Target");
+                                    ui.add_sized(
+                                        ui.available_size(),
+                                        TextEdit::singleline(&mut self.target_addr),
+                                    );
+                                });
+                                columns[1].horizontal(|ui| {
+                                    ui.label("Exclued Port(s)");
+                                    ui.add_sized(
+                                        ui.available_size(),
+                                        TextEdit::singleline(&mut self.target_port),
+                                    );
+                                });
+                            });
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut self.scan_mode.fast_mode, "Fast Mode");
+                                ui.checkbox(&mut self.scan_mode.slow_mode, "Slow Mode");
+                                ui.checkbox(&mut self.scan_mode.no_ping, "No Ping");
+                            });
+                        });
 
-                ui.horizontal(|ui| {
-                    if ui.button("Scan").clicked() {
-                        // start scan
-                        match pistol_scan(&self.target_addr, &self.target_port, &self.scan_mode) {
-                            Ok(ret) => match SCAN_RETS.lock() {
-                                Ok(_) => {}
-                                Err(e) => {
-                                    self.app_mode.show_error_message = true;
-                                    self.app_mode.error_message = e.to_string();
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Scan").clicked() {
+                            // start scan
+                            match pistol_scan(&self.target_addr, &self.target_port, &self.scan_mode)
+                            {
+                                Ok(ret) => {
+                                    println!("{}", ret);
+                                    match SCAN_RETS.lock() {
+                                        Ok(_) => match SCAN_RETS_ID.lock() {
+                                            Ok(mut id) => match SCAN_RETS.lock() {
+                                                Ok(mut map) => {
+                                                    map.insert(*id, ret);
+                                                    *id += 1;
+                                                    println!("insert end");
+                                                }
+                                                Err(e) => self.set_error_mssage(&e.to_string()),
+                                            },
+                                            Err(e) => self.set_error_mssage(&e.to_string()),
+                                        },
+                                        Err(e) => self.set_error_mssage(&e.to_string()),
+                                    }
                                 }
-                            },
-                            Err(e) => {
-                                self.app_mode.show_error_message = true;
-                                self.app_mode.error_message = e.to_string();
+                                Err(e) => self.set_error_mssage(&e.to_string()),
+                            }
+                        };
+                        // ui.separator();
+                        if ui.button("Cancel").clicked() {
+                            // cancel scan
+                        };
+                        ui.label(format!("Cost 6.66 s",));
+                    });
+
+                    // Added a empty line here.
+                    ui.separator();
+
+                    match SCAN_RETS.lock() {
+                        Ok(map) => {
+                            if map.len() > 0 {
+                                TableBuilder::new(ui)
+                                    .id_salt("results_table")
+                                    .striped(true)
+                                    .cell_layout(Layout::left_to_right(Align::Center))
+                                    .column(Column::auto())
+                                    .column(Column::remainder())
+                                    .header(20.0, |mut header| {
+                                        header.col(|ui| {
+                                            ui.label(RichText::new("id").strong());
+                                        });
+                                        header.col(|ui| {
+                                            ui.label(RichText::new("target").strong());
+                                        });
+                                        header.col(|ui| {
+                                            ui.label(RichText::new("port").strong());
+                                        });
+                                        header.col(|ui| {
+                                            ui.label(RichText::new("status").strong());
+                                        });
+                                    })
+                                    .body(|mut body| {
+                                        for (k, v) in map.iter() {
+                                            let mut i: u32 = 0;
+                                            for (ip, hmap) in &v.scans {
+                                                for (p, s) in hmap {
+                                                    body.row(18.0, |mut row| {
+                                                        row.col(|ui| {
+                                                            ui.label(format!("#{}-{}", k, i));
+                                                        });
+                                                        row.col(|ui| {
+                                                            ui.label(format!("{}", ip));
+                                                        });
+                                                        row.col(|ui| {
+                                                            ui.label(format!("{}", p));
+                                                        });
+                                                        let mut port_status = Vec::new();
+                                                        for ps in s {
+                                                            port_status
+                                                                .push(format!("{}", ps.status));
+                                                        }
+                                                        let port_status = port_status.join("|");
+                                                        row.col(|ui| {
+                                                            ui.label(format!("{}", port_status));
+                                                        });
+                                                    });
+                                                    i += 1;
+                                                }
+                                            }
+                                        }
+                                    });
+                            } else {
+                                ui.label("No data");
                             }
                         }
-                    };
+                        Err(e) => self.set_error_mssage(&e.to_string()),
+                    }
+
                     // ui.separator();
-                    if ui.button("Cancel").clicked() {
-                        // cancel scan
-                    };
-                    ui.label(format!("Cost 6.66 s",));
                 });
 
-                // Added a empty line here.
-                ui.separator();
-
-                TableBuilder::new(ui)
-                    .id_salt("results_table")
-                    .striped(true)
-                    .cell_layout(Layout::left_to_right(Align::Center))
-                    .column(Column::auto())
-                    .column(Column::remainder())
-                    .header(20.0, |mut header| {
-                        header.col(|ui| {
-                            ui.label(RichText::new("id").strong());
+                TopBottomPanel::bottom("bottom_bar")
+                    .resizable(true)
+                    .default_height(100.0)
+                    .show(ctx, |ui| {
+                        ScrollArea::vertical().max_height(100.0).show(ui, |ui| {
+                            ui.label("history");
+                            ui.separator();
+                            ui.label("xxxxxxxx");
+                            ui.label("xxxxxxxx");
+                            ui.label("xxxxxxxx");
+                            ui.label("xxxxxxxx");
+                            ui.label("xxxxxxxx");
                         });
-                        header.col(|ui| {
-                            ui.label(RichText::new("name").strong());
-                        });
-                    })
-                    .body(|mut body| {
-                        for i in 0..5 {
-                            body.row(18.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(format!("#{i}"));
-                                });
-                                row.col(|ui| {
-                                    ui.label(format!("user {i}"));
-                                });
-                            });
-                        }
                     });
-
-                // ui.separator();
-            });
-
-            TopBottomPanel::bottom("bottom_bar")
-                .resizable(true)
-                .default_height(100.0)
-                .show(ctx, |ui| {
-                    ScrollArea::vertical().max_height(100.0).show(ui, |ui| {
-                        ui.label("history");
-                        ui.separator();
-                        ui.label("xxxxxxxx");
-                        ui.label("xxxxxxxx");
-                        ui.label("xxxxxxxx");
-                        ui.label("xxxxxxxx");
-                        ui.label("xxxxxxxx");
-                    });
+            }
+            AppInterface::About => {
+                CentralPanel::default().show(ctx, |ui| {
+                    ui.label("This is free and opensource software.");
                 });
-        };
-
-        let about_interface = || {
-            CentralPanel::default().show(ctx, |ui| {
-                ui.label("This is free and opensource software.");
-            });
-        };
-
-        match self.app_mode.app_interface {
-            AppInterface::Scan => scan_interface(),
-            AppInterface::About => about_interface(),
+            }
         }
     }
 }
