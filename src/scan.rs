@@ -6,7 +6,7 @@ use pistol::tcp_syn_scan;
 use std::net::IpAddr;
 use std::time::Duration;
 
-use crate::ScanMode;
+use crate::ScanOptions;
 
 fn addr_parser(target_addr: &str) -> Result<Vec<IpAddr>> {
     // 192.168.1.1,192.168.1.2,192.168.1.6-192.168.1.10
@@ -20,6 +20,9 @@ fn addr_parser(target_addr: &str) -> Result<Vec<IpAddr>> {
                     let addr: IpAddr = ss.parse()?;
                     ret.push(addr);
                 }
+            } else {
+                let addr: IpAddr = s.parse()?;
+                ret.push(addr);
             }
         }
         Ok(ret)
@@ -38,9 +41,12 @@ fn port_parser(target_port: &str) -> Result<Vec<u16>> {
             if p.contains("-") {
                 let s_split: Vec<&str> = p.split("-").map(|x| x.trim()).collect();
                 for ss in s_split {
-                    let addr: u16 = ss.parse()?;
-                    ret.push(addr);
+                    let port: u16 = ss.parse()?;
+                    ret.push(port);
                 }
+            } else {
+                let port: u16 = p.parse()?;
+                ret.push(port);
             }
         }
         Ok(ret)
@@ -50,16 +56,22 @@ fn port_parser(target_port: &str) -> Result<Vec<u16>> {
     }
 }
 
-pub fn pistol_scan(target_addr: &str, target_port: &str, _mode: &ScanMode) -> Result<TcpUdpScans> {
+pub fn pistol_scan(
+    target_addr: &str,
+    target_port: &str,
+    _options: &ScanOptions,
+) -> Result<TcpUdpScans> {
     let target_addr = addr_parser(target_addr)?;
     let target_port = port_parser(target_port)?;
+
     let mut addrs = Vec::new();
     for a in target_addr {
         let host = Host::new(a, Some(target_port.clone()));
         addrs.push(host);
     }
+
     let target = Target::new(addrs);
-    let timeout = Some(Duration::new(0, 5));
+    let timeout = Some(Duration::new(1, 0));
     let tests = 2;
     let ret = tcp_syn_scan(&target, Some(8), None, None, timeout, tests)?;
     Ok(ret)
